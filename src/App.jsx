@@ -5,42 +5,76 @@ function App() {
   const [task, setTask] = useState('')
   const [editingId, setEditingId] = useState(null)
   const [filter, setFilter] = useState('all')
-  const [tasks, setTasks] = useState(() => {
-    const saved = localStorage.getItem('tasks')
-    return saved ? JSON.parse(saved) : []
-  })
+const [tasks, setTasks] = useState([])
 
-  useEffect(() => {
-    localStorage.setItem('tasks', JSON.stringify(tasks))
-  }, [tasks])
+  const fetchTasks = async () => {
+  const response = await fetch('http://127.0.0.1:5000/tasks')
+  const data = await response.json()
 
- const addTask = () => {
+  setTasks(data.tasks)
+}
+
+useEffect(() => {
+  fetchTasks()
+}, [])
+
+const addTask = async () => {
   if (task.trim() === '') return
 
-  const newTask = {
-    id: Date.now(),
-    text: task.trim(),
-    completed: false,
-  }
+  const response = await fetch('http://127.0.0.1:5000/tasks', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      text: task.trim(),
+    }),
+  })
+
+  const newTask = await response.json()
 
   setTasks([...tasks, newTask])
   setTask('')
 }
+const deleteTask = async (idToDelete) => {
+  const response = await fetch(`http://127.0.0.1:5000/tasks/${idToDelete}`, {
+    method: 'DELETE',
+  })
 
-const deleteTask = (idToDelete) => {
+  const data = await response.json()
+
+  console.log(data)
+
   setTasks(tasks.filter((item) => item.id !== idToDelete))
 }
-
-const clearCompleted = () => {
-  setTasks(tasks.filter((item) => !item.completed))
+const clearCompleted = async () => {
+  const done = tasks.filter((t) => t.completed)
+  await Promise.all(
+    done.map((t) =>
+      fetch(`http://127.0.0.1:5000/tasks/${t.id}`, { method: 'DELETE' })
+    )
+  )
+  setTasks(tasks.filter((t) => !t.completed))
 }
 
-const toggleTask = (idToToggle) => {
+const toggleTask = async (idToToggle) => {
+  const taskToUpdate = tasks.find((item) => item.id === idToToggle)
+
+  const response = await fetch(`http://127.0.0.1:5000/tasks/${idToToggle}`, {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      completed: !taskToUpdate.completed,
+    }),
+  })
+
+  const updatedTask = await response.json()
+
   setTasks(
     tasks.map((item) =>
-      item.id === idToToggle
-        ? { ...item, completed: !item.completed }
-        : item
+      item.id === idToToggle ? updatedTask : item
     )
   )
 }
@@ -61,6 +95,18 @@ const startEditing = (id) => {
 }
 
 const cancelEditing = () => {
+  setEditingId(null)
+}
+
+const saveEdit = async (id) => {
+  const item = tasks.find((t) => t.id === id)
+  const response = await fetch(`http://127.0.0.1:5000/tasks/${id}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ text: item.text }),
+  })
+  const updated = await response.json()
+  setTasks(tasks.map((t) => (t.id === id ? updated : t)))
   setEditingId(null)
 }
 
